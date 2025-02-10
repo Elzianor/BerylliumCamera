@@ -25,7 +25,7 @@
         <Copyright>Copyright © Beryllium Co. 2025</Copyright>
         <PackageTags>Monogame;Beryllium;Camera</PackageTags>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
-        <RepositoryUrl>https://github.com/YourRepository</RepositoryUrl>
+        <RepositoryUrl>https://github.com/Elzianor/BerylliumCamera</RepositoryUrl>
         <PackageReadmeFile>README.md</PackageReadmeFile>
     </PropertyGroup>
 </Project>
