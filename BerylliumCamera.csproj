@@ -1,15 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
-        <TargetFramework>net6.0-windows</TargetFramework>
+        <TargetFramework>net10.0-windows</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
-        <Nullable>enable</Nullable>
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="BerylliumMath" Version="0.0.3" />
-        <PackageReference Include="MonoGame.Framework.WindowsDX" Version="3.8.1.303" />
-        <None Include="README.md" Pack="true" PackagePath="\" />
-        <None Include="logo.png" Pack="true" PackagePath="" />
+        <PackageReference Include="BerylliumMath" Version="0.0.7"/>
+        <PackageReference Include="MonoGame.Framework.Compute.WindowsDX.NoMemoryLeak" Version="3.8.3.1"/>
+        <None Include="README.md" Pack="true" PackagePath="\"/>
+        <None Include="logo.png" Pack="true" PackagePath=""/>
     </ItemGroup>
 
     <PropertyGroup>
@@ -18,11 +17,11 @@
 
     <PropertyGroup>
         <PackageId>BerylliumCamera</PackageId>
-        <Version>0.0.1</Version>
+        <Version>1.0.0</Version>
         <Authors>Vladyslav Pysarenko</Authors>
         <Company>Beryllium Co.</Company>
         <Description>Camera functionality.</Description>
-        <Copyright>Copyright © Beryllium Co. 2025</Copyright>
+        <Copyright>Copyright © Beryllium Co. 2026</Copyright>
         <PackageTags>Monogame;Beryllium;Camera</PackageTags>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
         <RepositoryUrl>https://github.com/Elzianor/BerylliumCamera</RepositoryUrl>

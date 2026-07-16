@@ -1,356 +1,190 @@
-﻿using Microsoft.Xna.Framework;
-
-namespace Beryllium.Camera;
-
-public enum CameraType
-{
-    Free,
-    Fixed,
-    LookAtLocked
-}
+﻿namespace BerylliumCamera;
 
 public class Camera
 {
-    private float _frameTime;
-
-    #region Type
-    public CameraType CameraType { get; set; }
+    #region Offset cell size
+    private const float CellSize = 1000.0f;
     #endregion
 
-    #region Main matrices
-    public Matrix OffsetWorldMatrix { get; private set; }
-    public Matrix ViewMatrix { get; private set; }
-    public Matrix ProjectionMatrix { get; private set; }
+    #region Update flags
+    private bool _updateOffset;
+    private bool _updateView;
+    private bool _updateProjection;
     #endregion
 
-    #region Position(offset) / look-at
-    private Vector3 _oldOffset;
-
+    #region Parameters
     private Vector3 _offset;
-    public Vector3 Offset
+    public Vector3 Offset => _offset;
+
+    public Vector3 RebasedPosition => Position - _offset;
+
+    public Vector3 Position
     {
-        get => _offset;
+        get;
         set
         {
-            if (value == _offset) return;
-            _offset = value;
-            OffsetWorldMatrix = Matrix.CreateTranslation(-_offset);
+            if (field == value) return;
+
+            field = value;
+            _updateOffset = true;
+            _updateView = true;
         }
     }
 
-    private Vector3 _lookAt;
-    public Vector3 LookAt
+    public Quaternion Orientation
     {
-        get => _lookAt;
+        get;
         set
         {
-            if (value == _lookAt) return;
-            _lookAt = value;
-            CreateViewMatrixFromLookAtUp();
+            if (field == value) return;
+
+            field = value;
+            _updateView = true;
         }
+    }
+
+    private float _fieldOfView;
+    public float FieldOfViewDegrees
+    {
+        get;
+        set
+        {
+            if (Mathematics.AreEqual(field, value)) return;
+
+            field = value;
+            TrySetUpdateProjectionFlag(ref _fieldOfView, MathHelper.ToRadians(field));
+        }
+    }
+
+    public float AspectRatio
+    {
+        get;
+        set => TrySetUpdateProjectionFlag(ref field, value);
+    }
+
+    public float NearPlane
+    {
+        get;
+        set => TrySetUpdateProjectionFlag(ref field, value);
+    }
+
+    public float FarPlane
+    {
+        get;
+        set => TrySetUpdateProjectionFlag(ref field, value);
     }
     #endregion
 
-    #region Main axes
-    public Vector3 Forward { get; private set; }
-
-    private Vector3 _up;
-    public Vector3 Up
-    {
-        get => _up;
-        set
-        {
-            if (value == _up) return;
-            _up = value;
-            CreateViewMatrixFromLookAtUp();
-        }
-    }
-    public Vector3 Right { get; private set; }
+    #region Basis
+    public Vector3 Forward => Vector3.Transform(Vector3.Forward, Orientation);
+    public Vector3 Right => Vector3.Transform(Vector3.Right, Orientation);
+    public Vector3 Up => Vector3.Transform(Vector3.Up, Orientation);
     #endregion
 
-    #region Rotation quaternion
-    private Quaternion _oldRotation;
-
-    private Quaternion _rotation;
-    public Quaternion Rotation
-    {
-        get => _rotation;
-        set
-        {
-            if (value == _rotation) return;
-            _rotation = value;
-            CreateViewMatrixFromRotation();
-        }
-    }
+    #region Matrices
+    public Matrix View { get; private set; }
+    public Matrix Projection { get; private set; }
     #endregion
 
-    #region Perspective params
-    private int _viewPortWidth;
-    public int ViewPortWidth
+    #region Controller
+    public BaseCameraController Controller
     {
-        get => _viewPortWidth;
+        get;
         set
         {
-            if (value == _viewPortWidth) return;
-            _viewPortWidth = value;
-            UpdatePerspectiveFov();
-        }
-    }
+            if (field == value) return;
 
-    private int _viewPortHeight;
-    public int ViewPortHeight
-    {
-        get => _viewPortHeight;
-        set
-        {
-            if (value == _viewPortHeight) return;
-            _viewPortHeight = value;
-            UpdatePerspectiveFov();
-        }
-    }
-
-    private float _fovDegrees;
-    public float FovDegrees
-    {
-        get => _fovDegrees;
-        set
-        {
-            if (Mathematics.Mathematics.IsEqual(value, _fovDegrees)) return;
-            _fovDegrees = value;
-            UpdatePerspectiveFov();
-        }
-    }
-
-    private float _zNear;
-    public float ZNear
-    {
-        get => _zNear;
-        set
-        {
-            if (Mathematics.Mathematics.IsEqual(value, _zNear)) return;
-            _zNear = value;
-            UpdatePerspectiveFov();
-        }
-    }
-
-    private float _zFar;
-    public float ZFar
-    {
-        get => _zFar;
-        set
-        {
-            if (Mathematics.Mathematics.IsEqual(value, _zFar)) return;
-            _zFar = value;
-            UpdatePerspectiveFov();
+            field = value;
+            field.ApplyTo(this);
         }
     }
     #endregion
 
-    #region Velocity
-    public float MovementVelocity { get; set; }
-    public float RotationVelocity { get; set; }
-    #endregion
-
-    #region States
-    public bool IsMoving { get; private set; }
-    public bool IsRotating { get; private set; }
-    #endregion
-
-    public Camera(Vector3 position,
-        Vector3 lookAt,
-        Vector3 up,
-        int viewPortWidth,
-        int viewPortHeight,
-        CameraType cameraType = CameraType.Free,
-        float movementVelocity = 200.0f,
-        float rotationVelocity = 50.0f,
-        float fovDegrees = 45.0f,
-        float zNear = 0.1f,
-        float zFar = 10000000.0f)
+    public Camera()
+        : this(Vector3.Zero, Vector3.Forward, Vector3.Up)
     {
-        CameraType = cameraType;
-        MovementVelocity = movementVelocity;
-        RotationVelocity = rotationVelocity;
-
-        Offset = position;
-        _lookAt = lookAt;
-        _up = up;
-
-        CreateViewMatrixFromLookAtUp();
-
-        _viewPortWidth = viewPortWidth;
-        _viewPortHeight = viewPortHeight;
-        _fovDegrees = fovDegrees;
-        _zNear = zNear;
-        _zFar = zFar;
-
-        UpdatePerspectiveFov();
     }
 
-    #region Creators
-    private void CreateViewMatrixFromLookAtUp()
+    public Camera(Vector3 position, Vector3 target, Vector3 up)
     {
-        ViewMatrix = Matrix.CreateLookAt(Vector3.Zero, LookAt - Offset, Up);
-        ViewMatrix.Decompose(out _, out _rotation, out _);
-        GetMainAxesFromViewMatrix();
+        Position = position;
+        Orientation = Quaternion.Identity;
+        LookAt(target, up);
+
+        FieldOfViewDegrees = 45.0f;
+        AspectRatio = 4.0f / 3.0f;
+        NearPlane = 0.1f;
+        FarPlane = 1000.0f;
+
+        _updateOffset = _updateView = _updateProjection = true;
+        Update(0.0f);
     }
 
-    private void CreateViewMatrixFromRotation()
+    #region LookAt
+    public void LookAt(Vector3 worldTarget, Vector3 worldUp)
     {
-        ViewMatrix = Matrix.CreateFromQuaternion(_rotation);
-        GetMainAxesFromViewMatrix();
+        var dir = worldTarget - Position; // offset-invariant, so world-space is fine
+
+        if (dir.LengthSquared() < 1e-12f) return; // degenerate: target == position
+
+        var basis = Matrix.CreateWorld(Vector3.Zero, Vector3.Normalize(dir), worldUp);
+        Orientation = Quaternion.CreateFromRotationMatrix(basis);
     }
     #endregion
 
-    #region Updaters
-    private void UpdatePerspectiveFov()
+    #region Picking
+    public Ray ScreenPointToRay(Vector2 pixel, Viewport viewport)
     {
-        ProjectionMatrix = Matrix.CreatePerspectiveFieldOfView(MathHelper.ToRadians(FovDegrees),
-            (float)ViewPortWidth / ViewPortHeight,
-            ZNear,
-            ZFar);
-    }
+        var near = viewport.Unproject(new Vector3(pixel.X, pixel.Y, 0.0f), Projection, View, Matrix.Identity) + _offset;
+        var far = viewport.Unproject(new Vector3(pixel.X, pixel.Y, 1.0f), Projection, View, Matrix.Identity) + _offset;
 
-    public void Update(GameTime gameTime)
-    {
-        _frameTime = (float)gameTime.ElapsedGameTime.TotalSeconds;
-        CheckIsMovingRotating();
+        return new Ray(near, Vector3.Normalize(far - near));
     }
     #endregion
 
-    #region Rotation basic functions
-    public void SetAbsoluteRotation(float angleXInDegrees, float angleYInDegrees, float angleZInDegrees)
+    #region Update
+    public void Update(float elapsedSeconds)
     {
-        Rotation = Quaternion.CreateFromYawPitchRoll(MathHelper.ToRadians(angleYInDegrees),
-            MathHelper.ToRadians(angleXInDegrees),
-            MathHelper.ToRadians(angleZInDegrees));
-    }
+        Controller?.Update(elapsedSeconds);
 
-    public void RotateRelativeX(float angleInDegrees)
-    {
-        Rotation = Quaternion.Multiply(Quaternion.CreateFromAxisAngle(Vector3.UnitX, MathHelper.ToRadians(angleInDegrees)),
-            Rotation);
-    }
+        if (_updateOffset) UpdateOffset();
+        if (_updateView) UpdateView();
+        if (_updateProjection) UpdateProjection();
 
-    public void RotateRelativeY(float angleInDegrees)
-    {
-        Rotation = Quaternion.Multiply(Quaternion.CreateFromAxisAngle(Vector3.UnitY, MathHelper.ToRadians(angleInDegrees)),
-            Rotation);
-    }
-
-    public void RotateRelativeZ(float angleInDegrees)
-    {
-        Rotation = Quaternion.Multiply(Quaternion.CreateFromAxisAngle(Vector3.UnitZ, MathHelper.ToRadians(angleInDegrees)),
-            Rotation);
+        _updateOffset = _updateView = _updateProjection = false;
     }
     #endregion
 
-    #region Movement basic functions
-    public void MoveRelativeX(float relativeX)
+    #region Helpers
+    private void TrySetUpdateProjectionFlag(ref float field, float value)
     {
-        Offset += Vector3.Multiply(Right, relativeX);
+        if (Mathematics.AreEqual(field, value)) return;
+
+        field = value;
+        _updateProjection = true;
     }
 
-    public void MoveRelativeY(float relativeY)
+    private void UpdateOffset()
     {
-        Offset += Vector3.Multiply(Up, relativeY);
+        var delta = Position - Offset;
+        var before = _offset;
+
+        if (MathF.Abs(delta.X) > CellSize) _offset.X += MathF.Truncate(delta.X / CellSize) * CellSize;
+        if (MathF.Abs(delta.Y) > CellSize) _offset.Y += MathF.Truncate(delta.Y / CellSize) * CellSize;
+        if (MathF.Abs(delta.Z) > CellSize) _offset.Z += MathF.Truncate(delta.Z / CellSize) * CellSize;
+
+        if (_offset != before) _updateView = true;
     }
 
-    public void MoveRelativeZ(float relativeZ)
+    private void UpdateView()
     {
-        Offset += Vector3.Multiply(-Forward, relativeZ);
-    }
-    #endregion
-
-    #region Rotation utility functions
-    public void RotateUp()
-    {
-        RotateRelativeX(-RotationVelocity * _frameTime);
+        var pos = Position - _offset;
+        View = Matrix.CreateLookAt(pos, pos + Forward, Up); // built from the quaternion basis
     }
 
-    public void RotateDown()
+    private void UpdateProjection()
     {
-        RotateRelativeX(RotationVelocity * _frameTime);
-    }
-
-    public void RotateLeft()
-    {
-        RotateRelativeY(-RotationVelocity * _frameTime);
-    }
-
-    public void RotateRight()
-    {
-        RotateRelativeY(RotationVelocity * _frameTime);
-    }
-
-    public void TiltLeft()
-    {
-        RotateRelativeZ(-RotationVelocity * _frameTime);
-    }
-
-    public void TiltRight()
-    {
-        RotateRelativeZ(RotationVelocity * _frameTime);
-    }
-    #endregion
-
-    #region Movement utility functions
-    public void MoveForward()
-    {
-        MoveRelativeZ(-MovementVelocity * _frameTime);
-    }
-
-    public void MoveForward(float multiplier)
-    {
-        MoveRelativeZ(-MovementVelocity * multiplier * _frameTime);
-    }
-
-    public void MoveBackwards()
-    {
-        MoveRelativeZ(MovementVelocity * _frameTime);
-    }
-
-    public void MoveBackwards(float multiplier)
-    {
-        MoveRelativeZ(MovementVelocity * multiplier * _frameTime);
-    }
-
-    public void MoveLeft()
-    {
-        MoveRelativeX(-MovementVelocity * _frameTime);
-    }
-
-    public void MoveRight()
-    {
-        MoveRelativeX(MovementVelocity * _frameTime);
-    }
-
-    public void MoveUp()
-    {
-        MoveRelativeY(MovementVelocity * _frameTime);
-    }
-
-    public void MoveDown()
-    {
-        MoveRelativeY(-MovementVelocity * _frameTime);
-    }
-    #endregion
-
-    #region Misc
-    private void GetMainAxesFromViewMatrix()
-    {
-        Right = new Vector3(ViewMatrix.M11, ViewMatrix.M21, ViewMatrix.M31);
-        _up = new Vector3(ViewMatrix.M12, ViewMatrix.M22, ViewMatrix.M32);
-        Forward = new Vector3(-ViewMatrix.M13, -ViewMatrix.M23, -ViewMatrix.M33);
-    }
-
-    private void CheckIsMovingRotating()
-    {
-        IsMoving = _oldOffset != Offset;
-        IsRotating = _oldRotation != _rotation;
-
-        _oldOffset = Offset;
-        _oldRotation = _rotation;
+        Projection = Matrix.CreatePerspectiveFieldOfView(_fieldOfView, AspectRatio, NearPlane, FarPlane);
     }
     #endregion
 }
