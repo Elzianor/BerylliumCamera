@@ -1,4 +1,4 @@
-﻿namespace BerylliumCamera;
+﻿namespace BerylliumCamera.Controllers.Base;
 
 public abstract class BaseCameraController
 {
